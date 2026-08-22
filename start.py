@@ -208,6 +208,8 @@ def main():
                         tool_result = client.call_tool(name, raw_args)
                     except Exception as e:
                         tool_result = "ОШИБКА: " + str(e)
+                    preview = tool_result if len(tool_result) <= 2000 else tool_result[:2000] + "... (обрезано)"
+                    print("[результат] " + preview)
                     messages.append({
                         "role": "tool",
                         "name": name,
