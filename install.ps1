@@ -25,35 +25,80 @@ function Test-RealPython($name) {
     return $output -match "Python 3"
 }
 
-$pythonCmd = $null
-foreach ($candidate in @("py", "python", "python3")) {
-    if ((Test-Command $candidate) -and (Test-RealPython $candidate)) {
-        $pythonCmd = $candidate
-        break
+function Update-SessionPath {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Find-Python {
+    foreach ($candidate in @("py", "python", "python3")) {
+        if ((Test-Command $candidate) -and (Test-RealPython $candidate)) {
+            return $candidate
+        }
     }
+    return $null
+}
+
+$pythonCmd = Find-Python
+if (-not $pythonCmd) {
+    Write-Host "Python не найден (или в системе стоит только заглушка Microsoft Store). Пробую установить автоматически..."
+    if (Test-Command "winget") {
+        winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
+    } else {
+        $pyInstaller = Join-Path $env:TEMP "python-installer.exe"
+        Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe" -OutFile $pyInstaller -UseBasicParsing
+        Start-Process -FilePath $pyInstaller -ArgumentList "/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1" -Wait
+        Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
+    }
+    Update-SessionPath
+    $pythonCmd = Find-Python
 }
 if (-not $pythonCmd) {
-    Write-Host "Python не найден (или в системе стоит только заглушка Microsoft Store)."
-    Write-Host "Установите настоящий Python 3 с https://www.python.org/downloads/ (при установке отметьте ""Add python.exe to PATH""), затем запустите установщик ещё раз."
+    Write-Host "Не удалось установить Python автоматически."
+    Write-Host "Установите вручную с https://www.python.org/downloads/ (при установке отметьте ""Add python.exe to PATH""), затем запустите установщик ещё раз."
     Write-Host "Если Python уже стоял раньше, но команда 'python' открывает Microsoft Store - отключите алиас: Параметры -> Приложения -> Дополнительные параметры приложений -> Псевдонимы выполнения приложений -> выключите python.exe / python3.exe."
     Read-Host "Нажмите Enter для выхода"
     exit 1
 }
 
 if (-not (Test-Command "ollama")) {
-    Write-Host "Ollama не найдена."
-    Write-Host "Установите её с https://ollama.com/download и запустите установщик ещё раз."
-    Read-Host "Нажмите Enter для выхода"
-    exit 1
+    Write-Host "Ollama не найдена. Пробую установить автоматически..."
+    $ollamaInstaller = Join-Path $env:TEMP "OllamaSetup.exe"
+    Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile $ollamaInstaller -UseBasicParsing
+    Start-Process -FilePath $ollamaInstaller -ArgumentList "/VERYSILENT /NORESTART" -Wait
+    Remove-Item $ollamaInstaller -Force -ErrorAction SilentlyContinue
+    Update-SessionPath
+    Start-Sleep -Seconds 3
+    if (-not (Test-Command "ollama")) {
+        Write-Host "Не удалось установить Ollama автоматически."
+        Write-Host "Установите вручную с https://ollama.com/download и запустите установщик ещё раз."
+        Read-Host "Нажмите Enter для выхода"
+        exit 1
+    }
 }
 
-try {
-    Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 5 -UseBasicParsing | Out-Null
-} catch {
-    Write-Host "Похоже, Ollama не запущена."
-    Write-Host "Запустите Ollama и повторите установку."
-    Read-Host "Нажмите Enter для выхода"
-    exit 1
+function Test-OllamaRunning {
+    try {
+        Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 5 -UseBasicParsing | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+if (-not (Test-OllamaRunning)) {
+    Write-Host "Ollama не запущена. Пробую запустить..."
+    Start-Process "ollama" -ArgumentList "serve" -WindowStyle Hidden
+    $started = $false
+    for ($i = 0; $i -lt 10; $i++) {
+        Start-Sleep -Seconds 1
+        if (Test-OllamaRunning) { $started = $true; break }
+    }
+    if (-not $started) {
+        Write-Host "Не удалось запустить Ollama автоматически."
+        Write-Host "Запустите Ollama вручную и повторите установку."
+        Read-Host "Нажмите Enter для выхода"
+        exit 1
+    }
 }
 
 $suggestedModel = "qwen3:8b"
