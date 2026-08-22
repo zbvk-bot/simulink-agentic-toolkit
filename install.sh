@@ -94,5 +94,13 @@ if [ ! -f "$DEFAULT_SERVER" ]; then
     fi
 fi
 
+RUN_SH_PATH="$TARGET_DIR/run.sh"
+cat > "$RUN_SH_PATH" <<EOF
+#!/bin/sh
+"$PYTHON_CMD" "$TARGET_DIR/start.py" --server "$DEFAULT_SERVER" --tools "$TARGET_DIR/tools/tools.json" --model "$MODEL_NAME"
+EOF
+chmod +x "$RUN_SH_PATH"
+
 echo "Установка завершена. Запуск агента..."
+echo "В следующий раз можно запускать сразу: $RUN_SH_PATH"
 "$PYTHON_CMD" "$TARGET_DIR/start.py" --server "$DEFAULT_SERVER" --tools "$TARGET_DIR/tools/tools.json" --model "$MODEL_NAME"
