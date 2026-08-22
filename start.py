@@ -180,6 +180,8 @@ def main():
                 continue
             messages.append({"role": "user", "content": user_input})
 
+            max_tool_rounds = 8
+            tool_round = 0
             while True:
                 try:
                     result = ollama_chat(args.ollama_url, args.model, messages, ollama_tools)
@@ -193,6 +195,13 @@ def main():
 
                 if not tool_calls:
                     print("\n" + (message.get("content") or "").strip())
+                    break
+
+                tool_round += 1
+                if tool_round > max_tool_rounds:
+                    print("\nОстановлено: модель сделала слишком много вызовов инструментов подряд ("
+                          + str(max_tool_rounds) + ") без финального ответа. Возможно, она застряла - "
+                          "уточните запрос или сформулируйте его иначе.")
                     break
 
                 for call in tool_calls:
